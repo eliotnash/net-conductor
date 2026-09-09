@@ -75,18 +75,19 @@ type State struct {
 	Events   []Event   `json:"events"`
 }
 type ServerConfig struct {
-	Listen         string `json:"listen"`
-	ProxyListen    string `json:"proxyListen"`
-	PublicEndpoint string `json:"publicEndpoint"`
-	Interface      string `json:"interface"`
-	ServerIP       string `json:"serverIP"`
-	Network        string `json:"network"`
-	AdminToken     string `json:"adminToken"`
-	TLSCert        string `json:"tlsCert"`
-	TLSKey         string `json:"tlsKey"`
-	SSHKey         string `json:"sshKey"`
-	HealthURL      string `json:"healthURL"`
-	MapBind        string `json:"mapBind"`
+	LocalProxyListen string `json:"localProxyListen,omitempty"`
+	Listen           string `json:"listen"`
+	ProxyListen      string `json:"proxyListen"`
+	PublicEndpoint   string `json:"publicEndpoint"`
+	Interface        string `json:"interface"`
+	ServerIP         string `json:"serverIP"`
+	Network          string `json:"network"`
+	AdminToken       string `json:"adminToken"`
+	TLSCert          string `json:"tlsCert"`
+	TLSKey           string `json:"tlsKey"`
+	SSHKey           string `json:"sshKey"`
+	HealthURL        string `json:"healthURL"`
+	MapBind          string `json:"mapBind"`
 }
 type AgentConfig struct {
 	Shares        []SharedPort `json:"shares,omitempty"`

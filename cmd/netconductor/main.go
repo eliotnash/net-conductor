@@ -78,6 +78,13 @@ func serve(ctx context.Context, mode, path string) error {
 		return e
 	}
 	go s.Run(ctx)
+	if c.LocalProxyListen != "" {
+		go func() {
+			if err := s.RunLocalProxy(ctx); err != nil {
+				log.Fatalf("local proxy: %v", err)
+			}
+		}()
+	}
 	proxy := &http.Server{Addr: c.ProxyListen, Handler: s.ProxyHandler(), ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		if e := proxy.ListenAndServe(); e != http.ErrServerClosed {

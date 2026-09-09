@@ -464,6 +464,11 @@ func (s *Server) ProxyHandler() http.Handler {
 		return func(ctx context.Context, address string) (net.Conn, error) { return s.dialPolicy(ctx, id, address) }, nil
 	})
 }
+func (s *Server) RunLocalProxy(ctx context.Context) error {
+	return core.LocalProxy(ctx, s.cfg.LocalProxyListen, func(ctx context.Context, address string) (net.Conn, error) {
+		return s.dialPolicy(ctx, "cloud", address)
+	})
+}
 func (s *Server) dialPolicy(ctx context.Context, id, address string) (net.Conn, error) {
 	s.mu.Lock()
 	p := core.Policy{OnFailure: "block"}

@@ -1,0 +1,14 @@
+/runtime/
+/dist/
+/node_modules/
+/desktop/node_modules/
+*.exe
+*.log
+*.pem
+*.key
+/screenshots/
+/backups/
+agent.json
+server-config.json
+state.json
+*.crt

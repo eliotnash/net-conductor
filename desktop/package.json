@@ -1,0 +1,15 @@
+{
+  "name": "net-conductor",
+  "version": "0.1.0",
+  "description": "Windows private network desktop",
+  "main": "main.cjs",
+  "author": "eliotnash",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-packager . NetConductor --platform=win32 --arch=x64 --icon=assets/icon.ico --out=../dist --overwrite"
+  },
+  "devDependencies": {
+    "electron": "44.3.0",
+    "@electron/packager": "^19.0.0"
+  }
+}

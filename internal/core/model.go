@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const Version = "0.1.0"
+const Version = "0.1.1"
 
 type Device struct {
 	ID             string    `json:"id"`

@@ -85,7 +85,7 @@ function shell() {
     ? ["home", "repair", "logs"]
     : ["home", "devices", "proxy", "maps", "logs"];
   $("#app").innerHTML =
-    `<div class="shell"><aside class="side"><div class="brand"><span class="logo">N</span>Net Conductor</div><small>${agent ? "WINDOWS CLIENT" : "NETWORK CONTROL"}</small><nav>${nav.map((n) => `<button data-tab="${n}" class="${tab === n ? "active" : ""}">${ico(n)}<span>${names[n]}</span></button>`).join("")}</nav><footer><strong>${agent ? "Windows 节点客户端" : "自托管网络管理"}</strong><br>v0.1.0 · WireGuard 私网${!agent ? '<br><button data-action="logout">退出登录</button>' : ""}</footer></aside><main class="main"><header class="top"><div><h1 id="title">${names[tab]}</h1><p>${agent ? "你的设备、连接与网络出口" : "一台公网服务器，连接你的所有设备"}</p></div><span class="live" id="live">正在连接…</span></header><div id="content"></div></main></div>`;
+    `<div class="shell"><aside class="side"><div class="brand"><span class="logo">N</span>Net Conductor</div><small>${agent ? "WINDOWS CLIENT" : "NETWORK CONTROL"}</small><nav>${nav.map((n) => `<button data-tab="${n}" class="${tab === n ? "active" : ""}">${ico(n)}<span>${names[n]}</span></button>`).join("")}</nav><footer><strong>${agent ? "Windows 节点客户端" : "自托管网络管理"}</strong><br>v0.1.1 · WireGuard 私网${!agent ? '<br><button data-action="logout">退出登录</button>' : ""}</footer></aside><main class="main"><header class="top"><div><h1 id="title">${names[tab]}</h1><p>${agent ? "你的设备、连接与网络出口" : "一台公网服务器，连接你的所有设备"}</p></div><span class="live" id="live">正在连接…</span></header><div id="content"></div></main></div>`;
 }
 function panel(title, body, action = "", subtitle = "") {
   return `<section class="panel"><div class="panel-head"><div><h2>${title}</h2>${subtitle ? `<p>${subtitle}</p>` : ""}</div>${action}</div>${body}</section>`;

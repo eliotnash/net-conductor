@@ -142,6 +142,7 @@ func (a *Agent) state(w http.ResponseWriter, r *http.Request) {
 	core.JSON(w, map[string]any{"mode": "agent", "version": core.Version, "name": a.cfg.Name, "ip": a.cfg.IP, "server": a.cfg.Server, "interface": a.cfg.Interface, "proxyListen": a.cfg.ProxyListen, "status": a.status, "lastError": a.lastError, "lastSync": a.lastSync, "latencyMs": a.latency, "checks": a.checks, "events": a.events, "policy": a.policy, "enrolled": a.cfg.ID != "", "rx": a.rx, "tx": a.tx, "handshake": a.handshake, "exitName": a.exitName, "shares": a.cfg.Shares, "tunnelReady": a.status == "connected" && a.handshake > 0 && time.Since(time.Unix(a.handshake, 0)) < 180*time.Second})
 }
 func (a *Agent) Run(ctx context.Context) {
+	go a.recoveryLoop(ctx)
 	a.restoreShares()
 	a.diagnose()
 	a.sync(ctx)
@@ -511,6 +512,14 @@ func (a *Agent) startShare(c core.AgentConfig, p core.SharedPort) (net.Listener,
 		return nil, e
 	}
 	go func() {
+		defer func() {
+			ln.Close()
+			a.op.Lock()
+			defer a.op.Unlock()
+			if a.shares[p.ListenPort] == ln {
+				delete(a.shares, p.ListenPort)
+			}
+		}()
 		limit := make(chan struct{}, 128)
 		for {
 			conn, e := ln.Accept()

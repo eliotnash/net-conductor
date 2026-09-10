@@ -2,7 +2,7 @@
 
 一台公网服务器，连接 N 台 Windows 设备。提供网页管理端和 Windows 桌面客户端。
 
-**v0.1.0 测试版。** 首次实机验证采用已有 WireGuard 私网接入；全新机器安装路径尚未完成独立端到端验收。
+**v0.1.1 测试版。** 首次实机验证采用已有 WireGuard 私网接入；全新机器安装路径尚未完成独立端到端验收。
 
 ## 已实现
 
@@ -53,7 +53,9 @@ sudo env NC_PUBLIC_IP=你的公网IPv4 bash deploy/install-server.sh
 powershell -ExecutionPolicy Bypass -File deploy/Install-Desktop.ps1
 ```
 
-安装器检查 WireGuard；未安装时下载官方 AMD64 MSI，验证 Authenticode 签名后安装。桌面程序会创建快捷方式。后台服务名称 `NetConductorAgent`，数据目录 `%ProgramData%\NetConductor`。
+安装器检查 WireGuard；未安装时下载官方 AMD64 MSI，验证 Authenticode 签名后安装。桌面程序会创建快捷方式，并为指定桌面用户设置登录后自动进入托盘；手动打开时显示窗口。后台服务名称 `NetConductorAgent`，数据目录 `%ProgramData%\NetConductor`。后台开机启动，不依赖用户登录或桌面窗口。
+
+后台会检查已登记设备的 WireGuard 服务，自动启动已停止的服务；仅对本程序保存完整配置的隧道自动重新安装，接入的旧隧道不会被重建或覆盖。失败重试逐步延迟至最长 5 分钟。共享代理监听异常退出后自动重新监听，本地代理程序启动后，新请求自动恢复。普通断网、握手过期或艾可云未启动不会触发隧道反复重启，也不会自动启动艾可云。隧道服务仍在运行但内部卡死的情况仍需手动诊断修复。
 
 网页生成入网码，然后在桌面端填写服务器 HTTPS 地址、入网码、设备名和服务器证书。接入现有隧道时，网页生成入网码前填写该设备的虚拟 IP，客户端选择“接入已有隧道”并填写真实隧道名称。服务端会校验既有 IP 与公钥是否对应。
 

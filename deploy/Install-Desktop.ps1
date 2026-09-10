@@ -24,4 +24,14 @@ $link.TargetPath=Join-Path $desktopRoot 'NetConductor.exe'
 $link.WorkingDirectory=$desktopRoot
 $link.IconLocation=(Join-Path $desktopRoot 'NetConductor.exe')+',0'
 $link.Save()
+$desktopSid=(Get-LocalUser -Name $DesktopUser -ErrorAction Stop).SID.Value
+$profilePath=(Get-ItemProperty -LiteralPath ('HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\'+$desktopSid) -ErrorAction Stop).ProfileImagePath
+$startupPath=Join-Path ([Environment]::ExpandEnvironmentVariables($profilePath)) 'AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup'
+New-Item -ItemType Directory -Force -Path $startupPath | Out-Null
+$startupLink=$shell.CreateShortcut((Join-Path $startupPath 'Net Conductor.lnk'))
+$startupLink.TargetPath=$desktopExe
+$startupLink.Arguments='--startup'
+$startupLink.WorkingDirectory=$desktopRoot
+$startupLink.IconLocation=$desktopExe+',0'
+$startupLink.Save()
 Write-Host 'Net Conductor installed. Open the desktop shortcut to join your server.'

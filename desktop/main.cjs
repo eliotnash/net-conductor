@@ -56,6 +56,7 @@ const configPath =
     "agent.json",
   );
 let origin = "http://127.0.0.1:18765";
+let reloadTimer;
 function readConfig() {
   const c = JSON.parse(fs.readFileSync(configPath, "utf8"));
   if (!/^127\.0\.0\.1:\d+$/.test(c.localListen))
@@ -85,6 +86,14 @@ function show() {
     },
   });
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.on("did-fail-load", (event, code, description, url, isMainFrame) => {
+    if (!isMainFrame || code === -3 || quitting) return;
+    clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => {
+      if (window && !window.isDestroyed()) window.loadURL(origin + "/#desktop").catch(() => {});
+    }, 5000);
+  });
+  window.webContents.on("did-finish-load", () => clearTimeout(reloadTimer));
   window.webContents.on("will-navigate", (e, url) => {
     if (new URL(url).origin !== origin) e.preventDefault();
   });
@@ -94,8 +103,8 @@ function show() {
       window.hide();
     }
   });
-  window.on("closed", () => (window = null));
-  window.loadURL(origin + "/#desktop");
+  window.on("closed", () => { clearTimeout(reloadTimer); window = null; });
+  window.loadURL(origin + "/#desktop").catch(() => {});
 }
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
@@ -145,7 +154,7 @@ else {
       ]),
     );
     tray.on("double-click", show);
-    show();
+    if (!process.argv.includes("--startup")) show();
   });
   app.on("before-quit", () => (quitting = true));
   app.on("window-all-closed", () => {});

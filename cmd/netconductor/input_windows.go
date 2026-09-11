@@ -13,13 +13,13 @@ import (
 )
 
 type desktopInput struct {
-	Kind   string  `json:"kind"`
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
-	Button int     `json:"button"`
-	Down   bool    `json:"down"`
-	Code   string  `json:"code"`
-	Delta  int32   `json:"delta"`
+	Kind   string   `json:"kind"`
+	X      *float64 `json:"x"`
+	Y      *float64 `json:"y"`
+	Button int      `json:"button"`
+	Down   bool     `json:"down"`
+	Code   string   `json:"code"`
+	Delta  int32    `json:"delta"`
 }
 type winInput struct {
 	Type uint32
@@ -87,13 +87,13 @@ func inputMain() {
 				}
 			case "move", "button", "wheel":
 				var i winInput
-				if r.Kind == "move" {
-					if r.X < 0 || r.X > 1 || r.Y < 0 || r.Y > 1 {
+				if r.Kind == "move" || (r.Kind == "button" && r.X != nil && r.Y != nil) {
+					if r.X == nil || r.Y == nil || *r.X < 0 || *r.X > 1 || *r.Y < 0 || *r.Y > 1 {
 						err = errors.New("invalid pointer")
 						break
 					}
-					binary.LittleEndian.PutUint32(i.Data[:4], uint32(r.X*65535))
-					binary.LittleEndian.PutUint32(i.Data[4:8], uint32(r.Y*65535))
+					binary.LittleEndian.PutUint32(i.Data[:4], uint32(*r.X*65535))
+					binary.LittleEndian.PutUint32(i.Data[4:8], uint32(*r.Y*65535))
 					binary.LittleEndian.PutUint32(i.Data[12:16], 0x8001)
 				}
 				if r.Kind == "button" {
@@ -114,7 +114,7 @@ func inputMain() {
 					if !r.Down {
 						flags *= 2
 					}
-					binary.LittleEndian.PutUint32(i.Data[12:16], flags)
+					binary.LittleEndian.PutUint32(i.Data[12:16], binary.LittleEndian.Uint32(i.Data[12:16])|flags)
 				}
 				if r.Kind == "wheel" {
 					if r.Delta < -1200 || r.Delta > 1200 {

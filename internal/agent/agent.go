@@ -27,24 +27,26 @@ import (
 )
 
 type Agent struct {
-	desktop   desktopBridge
-	mu        sync.Mutex
-	op        sync.Mutex
-	cfg       core.AgentConfig
-	path      string
-	status    string
-	lastError string
-	lastSync  time.Time
-	latency   int64
-	checks    []core.Check
-	events    []core.Event
-	policy    core.Policy
-	client    *http.Client
-	shares    map[int]net.Listener
-	rx        int64
-	tx        int64
-	handshake int64
-	exitName  string
+	remoteState string
+	desktopSeen time.Time
+	desktop     desktopBridge
+	mu          sync.Mutex
+	op          sync.Mutex
+	cfg         core.AgentConfig
+	path        string
+	status      string
+	lastError   string
+	lastSync    time.Time
+	latency     int64
+	checks      []core.Check
+	events      []core.Event
+	policy      core.Policy
+	client      *http.Client
+	shares      map[int]net.Listener
+	rx          int64
+	tx          int64
+	handshake   int64
+	exitName    string
 }
 
 func New(path string) (*Agent, error) {
@@ -146,7 +148,7 @@ func (a *Agent) Handler(assets fs.FS) http.Handler {
 func (a *Agent) state(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	core.JSON(w, map[string]any{"mode": "agent", "version": core.Version, "name": a.cfg.Name, "ip": a.cfg.IP, "server": a.cfg.Server, "interface": a.cfg.Interface, "proxyListen": a.cfg.ProxyListen, "status": a.status, "lastError": a.lastError, "lastSync": a.lastSync, "latencyMs": a.latency, "checks": a.checks, "events": a.events, "policy": a.policy, "enrolled": a.cfg.ID != "", "rx": a.rx, "tx": a.tx, "handshake": a.handshake, "exitName": a.exitName, "shares": a.cfg.Shares, "tunnelReady": a.status == "connected" && a.handshake > 0 && time.Since(time.Unix(a.handshake, 0)) < 180*time.Second})
+	core.JSON(w, map[string]any{"remoteState": a.remoteState, "desktopReady": !a.desktopSeen.IsZero() && time.Since(a.desktopSeen) < 30*time.Second, "mode": "agent", "version": core.Version, "name": a.cfg.Name, "ip": a.cfg.IP, "server": a.cfg.Server, "interface": a.cfg.Interface, "proxyListen": a.cfg.ProxyListen, "status": a.status, "lastError": a.lastError, "lastSync": a.lastSync, "latencyMs": a.latency, "checks": a.checks, "events": a.events, "policy": a.policy, "enrolled": a.cfg.ID != "", "rx": a.rx, "tx": a.tx, "handshake": a.handshake, "exitName": a.exitName, "shares": a.cfg.Shares, "tunnelReady": a.status == "connected" && a.handshake > 0 && time.Since(time.Unix(a.handshake, 0)) < 180*time.Second})
 }
 func (a *Agent) Run(ctx context.Context) {
 	go a.remoteLoop(ctx)
@@ -265,8 +267,31 @@ func (a *Agent) diagnose() {
 		}
 		checks = append(checks, core.Check{Name: "虚拟 IP", OK: found, Detail: c.IP})
 	}
-	checks = append(checks, core.TCPCheck("127.0.0.1:22"), core.TCPCheck(c.ProxyListen))
+	address, err := localSSHAddress(c)
+	if err != nil {
+		checks = append(checks, core.Check{Name: "SSH", Detail: err.Error()})
+	} else {
+		checks = append(checks, core.TCPCheck(address))
+	}
+	checks = append(checks, core.TCPCheck(c.ProxyListen))
 	a.mu.Lock()
+	checks = append(checks, core.Check{Name: "远程信令", OK: a.remoteState == "connected", Detail: a.remoteState}, core.Check{Name: "桌面托盘", OK: !a.desktopSeen.IsZero() && time.Since(a.desktopSeen) < 30*time.Second, Detail: "需要实际用户登录、解锁且托盘运行"})
+	a.mu.Unlock()
+	if len(c.Shares) == 0 {
+		checks = append(checks, core.Check{Name: "共享代理", Detail: "尚未配置；本机代理入口不等于共享出口"})
+	}
+	for _, share := range c.Shares {
+		check := core.TCPCheck(core.HostPort("127.0.0.1", share.LocalPort))
+		check.Name = fmt.Sprintf("共享代理 %d → 本机 %d", share.ListenPort, share.LocalPort)
+		if !check.OK {
+			check.Detail = "本机代理未启动；请自行启动艾可云/Clash，启动后共享会自动恢复"
+		}
+		checks = append(checks, check)
+	}
+	a.mu.Lock()
+	if len(checks) > 20 {
+		checks = checks[:20]
+	}
 	a.checks = checks
 	a.mu.Unlock()
 }

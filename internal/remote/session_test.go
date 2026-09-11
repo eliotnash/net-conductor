@@ -128,3 +128,23 @@ func TestModeAndDesktopRestrictions(t *testing.T) {
 		t.Fatal("unknown mode accepted")
 	}
 }
+
+func TestRelayWithoutWebRTC(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	replies := make(chan []byte, 1)
+	s, err := New(ctx, Config{}, Offer{Mode: "files", Transport: "relay"}, func(kind string, v any) error { b, _ := json.Marshal(v); replies <- b; return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	s.Relay([]byte(`{"id":1,"op":"ping"}`))
+	select {
+	case b := <-replies:
+		if !strings.Contains(string(b), `"ready"`) {
+			t.Fatal(string(b))
+		}
+	case <-ctx.Done():
+		t.Fatal("relay waited for SDP")
+	}
+}

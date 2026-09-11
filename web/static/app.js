@@ -438,18 +438,18 @@ async function action(name, id) {
       field(
         "本机 HTTP / SOCKS5 代理端口",
         "port",
-        33211,
+        "",
         "number",
         'required min="1" max="65535"',
       ) +
         field(
           "私网共享端口",
           "listenPort",
-          34211,
+          "",
           "number",
           'required min="1024" max="65535"',
         ) +
-        '<p class="help">仅允许公网服务器访问。完成后在网页设备设置中填写对应协议和私网共享端口。</p>',
+        '<p class="help">请先在艾可云/Clash 中核对实际监听端口与协议，不要填写 Net Conductor 本机入口。仅允许公网服务器访问。完成后在网页设备设置中填写对应协议和私网共享端口，并将服务器出口策略选择为本机。代理需自行启动，停止时共享会等待，重启后自动恢复。</p>',
       (v) =>
         api("/api/local/share", "POST", {
           port: +v.port,

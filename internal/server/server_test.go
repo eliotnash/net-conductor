@@ -161,9 +161,22 @@ func TestTCPAndUDPForwarding(t *testing.T) {
 	s.state.Devices = append(s.state.Devices, core.Device{ID: "target", IP: "127.0.0.1"})
 	for _, proto := range []string{"tcp", "udp"} {
 		t.Run(proto, func(t *testing.T) {
-			ln, _ := net.Listen("tcp", "127.0.0.1:0")
-			p := ln.Addr().(*net.TCPAddr).Port
-			ln.Close()
+			var p int
+			if proto == "udp" {
+				ln, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
+				if err != nil {
+					t.Fatal(err)
+				}
+				p = ln.LocalAddr().(*net.UDPAddr).Port
+				ln.Close()
+			} else {
+				ln, err := net.Listen("tcp", "127.0.0.1:0")
+				if err != nil {
+					t.Fatal(err)
+				}
+				p = ln.Addr().(*net.TCPAddr).Port
+				ln.Close()
+			}
 			target := tcp.Addr().(*net.TCPAddr).Port
 			if proto == "udp" {
 				target = udp.LocalAddr().(*net.UDPAddr).Port

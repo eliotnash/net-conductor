@@ -85,7 +85,7 @@ function shell() {
     ? ["home", "repair", "logs"]
     : ["home", "devices", "proxy", "maps", "logs"];
   $("#app").innerHTML =
-    `<div class="shell"><aside class="side"><div class="brand"><span class="logo">N</span>Net Conductor</div><small>${agent ? "WINDOWS CLIENT" : "NETWORK CONTROL"}</small><nav>${nav.map((n) => `<button data-tab="${n}" class="${tab === n ? "active" : ""}">${ico(n)}<span>${names[n]}</span></button>`).join("")}</nav><footer><strong>${agent ? "Windows 节点客户端" : "自托管网络管理"}</strong><br>v0.1.1 · WireGuard 私网${!agent ? '<br><button data-action="logout">退出登录</button>' : ""}</footer></aside><main class="main"><header class="top"><div><h1 id="title">${names[tab]}</h1><p>${agent ? "你的设备、连接与网络出口" : "一台公网服务器，连接你的所有设备"}</p></div><span class="live" id="live">正在连接…</span></header><div id="content"></div></main></div>`;
+    `<div class="shell"><aside class="side"><div class="brand"><span class="logo">N</span>Net Conductor</div><small>${agent ? "WINDOWS CLIENT" : "NETWORK CONTROL"}</small><nav>${nav.map((n) => `<button data-tab="${n}" class="${tab === n ? "active" : ""}">${ico(n)}<span>${names[n]}</span></button>`).join("")}</nav><footer><strong>${agent ? "Windows 节点客户端" : "自托管网络管理"}</strong><br>v0.2.0 · WireGuard 私网${!agent ? '<br><button data-action="logout">退出登录</button>' : ""}</footer></aside><main class="main"><header class="top"><div><h1 id="title">${names[tab]}</h1><p>${agent ? "你的设备、连接与网络出口" : "一台公网服务器，连接你的所有设备"}</p></div><span class="live" id="live">正在连接…</span></header><div id="content"></div></main></div>`;
 }
 function panel(title, body, action = "", subtitle = "") {
   return `<section class="panel"><div class="panel-head"><div><h2>${title}</h2>${subtitle ? `<p>${subtitle}</p>` : ""}</div>${action}</div>${body}</section>`;
@@ -162,7 +162,7 @@ function render() {
     $("#content").innerHTML = panel("操作与连接事件", events());
 }
 function deviceTable(compact = false) {
-  return `<div class="table-wrap"><table><thead><tr><th>设备</th><th>状态</th>${compact ? "" : "<th>往返延迟</th><th>隧道流量 ↓ / ↑</th><th>代理出口</th>"}<th>操作</th></tr></thead><tbody>${state.devices.map((d) => `<tr><td><strong>${esc(d.name)}</strong><small class="mono">${esc(d.ip)} · ${esc(d.os)}</small></td><td>${badge(d.status === "online")}</td>${compact ? "" : `<td>${d.id === "cloud" ? "—" : d.status === "online" ? d.latencyMs + " ms" : "—"}<small>${d.agentVersion ? "v" + esc(d.agentVersion) : "无客户端心跳"}</small></td><td class="mono">${bytes(d.tx)} / ${bytes(d.rx)}<small>${d.handshake ? "握手 " + date(new Date(d.handshake * 1000).toISOString()) : "暂无握手"}</small></td><td>${d.proxyPort ? badge(d.proxyHealthy, d.proxyHealthy ? "可用" : "不可用") : "未配置"}<small>${d.proxyPort ? esc(d.proxyType) + ":" + d.proxyPort : ""}</small></td>`}<td><div class="toolbar"><button data-action="ssh" data-id="${d.id}" ${d.sshUser && d.sshFingerprint ? "" : "disabled"}>SSH</button>${compact ? "" : `<button data-action="device" data-id="${d.id}">设置</button>`}</div></td></tr>`).join("")}</tbody></table></div>`;
+  return `<div class="table-wrap"><table><thead><tr><th>设备</th><th>状态</th>${compact ? "" : "<th>往返延迟</th><th>隧道流量 ↓ / ↑</th><th>代理出口</th>"}<th>操作</th></tr></thead><tbody>${state.devices.map((d) => `<tr><td><strong>${esc(d.name)}</strong><small class="mono">${esc(d.ip)} · ${esc(d.os)}</small></td><td>${badge(d.status === "online")}</td>${compact ? "" : `<td>${d.id === "cloud" ? "—" : d.status === "online" ? d.latencyMs + " ms" : "—"}<small>${d.agentVersion ? "v" + esc(d.agentVersion) : "无客户端心跳"}</small></td><td class="mono">${bytes(d.tx)} / ${bytes(d.rx)}<small>${d.handshake ? "握手 " + date(new Date(d.handshake * 1000).toISOString()) : "暂无握手"}</small></td><td>${d.proxyPort ? badge(d.proxyHealthy, d.proxyHealthy ? "可用" : "不可用") : "未配置"}<small>${d.proxyPort ? esc(d.proxyType) + ":" + d.proxyPort : ""}</small></td>`}<td><div class="toolbar"><button data-action="ssh" data-id="${d.id}" ${d.sshUser && d.sshFingerprint ? "" : "disabled"}>SSH</button><button data-action="files" data-id="${d.id}" ${canRemote(d) ? "" : 'disabled title="请升级客户端到 v0.2.0"'}>文件</button>${d.os === "windows" ? `<button data-action="desktop" data-id="${d.id}" ${canRemote(d) ? "" : 'disabled title="请升级客户端到 v0.2.0"'}>桌面</button>` : ""}${compact ? "" : `<button data-action="device" data-id="${d.id}">设置</button>`}</div></td></tr>`).join("")}</tbody></table></div>`;
 }
 function renderAgent() {
   const connected = state.status === "connected";
@@ -477,7 +477,9 @@ async function action(name, id) {
       (v) => window.desktop.systemProxy(v.action),
     );
   }
-  if (name === "ssh") openSSH(id);
+  if (name === "ssh" && !canRemote(device(id))) openSSH(id);
+  else if (["ssh", "files", "desktop"].includes(name))
+    window.openRemote(id, name, deviceName(id));
 }
 function openSSH(id) {
   closeDialog();
@@ -570,3 +572,10 @@ refresh();
 setInterval(() => {
   if (agent || authenticated) refresh();
 }, 3000);
+
+function canRemote(d) {
+  const [major, minor] = String(d?.agentVersion || "0.0")
+    .split(".")
+    .map(Number);
+  return d?.id === "cloud" || major > 0 || minor >= 2;
+}

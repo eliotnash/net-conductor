@@ -27,6 +27,7 @@ import (
 )
 
 type Agent struct {
+	desktop   desktopBridge
 	mu        sync.Mutex
 	op        sync.Mutex
 	cfg       core.AgentConfig
@@ -76,6 +77,8 @@ func New(path string) (*Agent, error) {
 		return nil, e
 	}
 	a := &Agent{cfg: c, path: path, status: "disconnected", shares: map[int]net.Listener{}}
+	a.desktop.queue = make(chan desktopJob, 32)
+	a.desktop.pending = map[string]chan desktopResult{}
 	client, e := makeClient(c.Certificate)
 	if e != nil {
 		return nil, e
@@ -112,6 +115,10 @@ func (a *Agent) Handler(assets fs.FS) http.Handler {
 			return
 		}
 		switch {
+		case r.Method == "POST" && r.URL.Path == "/api/local/desktop/next":
+			a.desktopNext(w, r)
+		case r.Method == "POST" && r.URL.Path == "/api/local/desktop/reply":
+			a.desktopReply(w, r)
 		case r.Method == "GET" && r.URL.Path == "/api/local/state":
 			a.state(w, r)
 		case r.Method == "POST" && r.URL.Path == "/api/local/join":
@@ -142,6 +149,7 @@ func (a *Agent) state(w http.ResponseWriter, r *http.Request) {
 	core.JSON(w, map[string]any{"mode": "agent", "version": core.Version, "name": a.cfg.Name, "ip": a.cfg.IP, "server": a.cfg.Server, "interface": a.cfg.Interface, "proxyListen": a.cfg.ProxyListen, "status": a.status, "lastError": a.lastError, "lastSync": a.lastSync, "latencyMs": a.latency, "checks": a.checks, "events": a.events, "policy": a.policy, "enrolled": a.cfg.ID != "", "rx": a.rx, "tx": a.tx, "handshake": a.handshake, "exitName": a.exitName, "shares": a.cfg.Shares, "tunnelReady": a.status == "connected" && a.handshake > 0 && time.Since(time.Unix(a.handshake, 0)) < 180*time.Second})
 }
 func (a *Agent) Run(ctx context.Context) {
+	go a.remoteLoop(ctx)
 	go a.recoveryLoop(ctx)
 	a.restoreShares()
 	a.diagnose()
@@ -178,7 +186,7 @@ func (a *Agent) sync(ctx context.Context) {
 	if c.ID == "" {
 		return
 	}
-	body, _ := json.Marshal(map[string]any{"id": c.ID, "version": core.Version, "latencyMs": latency, "diagnostics": checks})
+	body, _ := json.Marshal(map[string]any{"id": c.ID, "version": core.Version, "latencyMs": latency, "diagnostics": checks, "sshUser": c.SSHUser, "sshFingerprint": c.SSHHostFingerprint})
 	req, e := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(c.Server, "/")+"/api/heartbeat", bytes.NewReader(body))
 	if e != nil {
 		return

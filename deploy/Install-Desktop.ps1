@@ -1,5 +1,5 @@
 #Requires -RunAsAdministrator
-param([string]$DesktopUser=$env:USERNAME)
+param([string]$DesktopUser=$env:USERNAME,[string]$PrivateNetwork='10.77.0.0/24')
 $ErrorActionPreference='Stop'
 if (-not (Test-Path -LiteralPath (Join-Path $env:ProgramFiles 'WireGuard\wireguard.exe'))) {
  $msi=Join-Path $env:TEMP 'net-conductor-wireguard-amd64-1.1.msi'
@@ -9,7 +9,15 @@ if (-not (Test-Path -LiteralPath (Join-Path $env:ProgramFiles 'WireGuard\wiregua
  $installation=Start-Process msiexec.exe -ArgumentList @('/i',('"'+$msi+'"'),'/qn','/norestart','DO_NOT_LAUNCH=1') -WindowStyle Hidden -Wait -PassThru
  if ($installation.ExitCode -notin 0,3010) { throw "WireGuard installation failed: $($installation.ExitCode)" }
 }
+Get-Process | Where-Object { $_.Path -eq (Join-Path $env:ProgramFiles 'NetConductorDesktop\NetConductor.exe') } | ForEach-Object {
+ Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+ Wait-Process -Id $_.Id -Timeout 15 -ErrorAction SilentlyContinue
+}
 & (Join-Path $PSScriptRoot 'Install-Agent.ps1') -DesktopUser $DesktopUser
+& (Join-Path $PSScriptRoot 'Install-OpenSSH.ps1') -DesktopUser $DesktopUser -PrivateNetwork $PrivateNetwork
+if (-not (Get-NetFirewallRule -Name 'NetConductor-WebRTC' -ErrorAction SilentlyContinue)) {
+ New-NetFirewallRule -Name 'NetConductor-WebRTC' -DisplayName 'Net Conductor authenticated WebRTC' -Direction Inbound -Action Allow -Protocol UDP -Program (Join-Path $env:ProgramFiles 'NetConductor\netconductor.exe') | Out-Null
+}
 $desktopRoot=Join-Path $env:ProgramFiles 'NetConductorDesktop'
 $desktopExe=Join-Path $desktopRoot 'NetConductor.exe'
 Get-Process | Where-Object { $_.Path -eq $desktopExe } | ForEach-Object {

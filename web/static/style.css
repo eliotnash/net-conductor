@@ -679,3 +679,105 @@ a {
     grid-template-columns: 1fr;
   }
 }
+/* Remote sessions retain their own dialog so dashboard refreshes do not replace transfers. */
+.remote-dialog {
+  width: min(1200px, 96vw);
+  max-width: 96vw;
+  height: min(850px, 94vh);
+  border: 1px solid #c9d7e7;
+  border-radius: 14px;
+  padding: 0;
+  background: #f5f7fb;
+  color: #18314f;
+}
+.remote-dialog::backdrop {
+  background: #061c3599;
+  backdrop-filter: blur(3px);
+}
+.remote-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: #0b2340;
+  color: white;
+}
+.remote-dialog h2 {
+  font-size: 19px;
+  margin: 0;
+}
+.remote-status {
+  padding: 10px 20px;
+  background: #e6f1ff;
+  color: #0962c0;
+}
+.remote-error {
+  padding: 4px 20px;
+  color: #ac2839;
+  white-space: pre-wrap;
+}
+.remote-body {
+  padding: 16px;
+  overflow: auto;
+  height: calc(100% - 125px);
+}
+.remote-terminal {
+  height: 100%;
+  min-height: 350px;
+  background: #0c192b;
+  padding: 10px;
+  border-radius: 8px;
+}
+.remote-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.remote-tools .path {
+  flex: 1;
+  min-width: 180px;
+}
+.file-table {
+  overflow: auto;
+}
+.file-table table {
+  width: 100%;
+}
+.file-table td,
+.file-table th {
+  padding: 10px;
+  border-bottom: 1px solid #dde5ef;
+  text-align: left;
+}
+.file-table .entry {
+  background: none;
+  border: 0;
+  text-align: left;
+}
+.upload-label {
+  display: inline-block;
+  position: relative;
+  padding: 9px;
+  border: 1px solid #ccd8e6;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.upload {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  cursor: pointer;
+}
+.remote-screen {
+  display: block;
+  width: 100%;
+  height: auto;
+  outline: 2px solid #c8d8ec;
+  background: #0b2340;
+  user-select: none;
+}
+.remote-screen:focus {
+  outline-color: #0878ef;
+}

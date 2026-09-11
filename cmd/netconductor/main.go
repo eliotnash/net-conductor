@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"netconductor/internal/agent"
 	"netconductor/internal/core"
+	"netconductor/internal/remote"
 	"netconductor/internal/server"
 	"netconductor/web"
 	"os"
@@ -29,6 +30,20 @@ func main() {
 	mode := flag.String("mode", "server", "server, agent, init-server, init-agent")
 	config := flag.String("config", "runtime/config.json", "configuration file")
 	flag.Parse()
+	if *mode == "desktop-input" {
+		inputMain()
+		return
+	}
+	if *mode == "init-local-ssh" {
+		var c core.AgentConfig
+		if e := core.Load(*config, &c); e != nil {
+			log.Fatal(e)
+		}
+		if e := remote.InitKey(c.SSHKey, c.SSHAuthorizedKeys); e != nil {
+			log.Fatal("local SSH initialization failed")
+		}
+		return
+	}
 	if *mode == "init-server" {
 		initServer(*config)
 		return

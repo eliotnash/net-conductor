@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const Version = "0.1.1"
+const Version = "0.2.0"
 
 type Device struct {
 	ID             string    `json:"id"`
@@ -90,21 +90,25 @@ type ServerConfig struct {
 	MapBind          string `json:"mapBind"`
 }
 type AgentConfig struct {
-	Shares        []SharedPort `json:"shares,omitempty"`
-	Server        string       `json:"server"`
-	Certificate   string       `json:"certificate"`
-	ID            string       `json:"id"`
-	Token         string       `json:"token"`
-	Name          string       `json:"name"`
-	IP            string       `json:"ip"`
-	Interface     string       `json:"interface"`
-	LocalListen   string       `json:"localListen"`
-	ProxyListen   string       `json:"proxyListen"`
-	HubProxy      string       `json:"hubProxy"`
-	LocalToken    string       `json:"localToken"`
-	WireGuardPath string       `json:"wireGuardPath"`
-	PrivateKey    string       `json:"privateKey,omitempty"`
-	TunnelConfig  string       `json:"tunnelConfig,omitempty"`
+	SSHUser            string       `json:"sshUser,omitempty"`
+	SSHKey             string       `json:"sshKey,omitempty"`
+	SSHAuthorizedKeys  string       `json:"sshAuthorizedKeys,omitempty"`
+	SSHHostFingerprint string       `json:"sshHostFingerprint,omitempty"`
+	Shares             []SharedPort `json:"shares,omitempty"`
+	Server             string       `json:"server"`
+	Certificate        string       `json:"certificate"`
+	ID                 string       `json:"id"`
+	Token              string       `json:"token"`
+	Name               string       `json:"name"`
+	IP                 string       `json:"ip"`
+	Interface          string       `json:"interface"`
+	LocalListen        string       `json:"localListen"`
+	ProxyListen        string       `json:"proxyListen"`
+	HubProxy           string       `json:"hubProxy"`
+	LocalToken         string       `json:"localToken"`
+	WireGuardPath      string       `json:"wireGuardPath"`
+	PrivateKey         string       `json:"privateKey,omitempty"`
+	TunnelConfig       string       `json:"tunnelConfig,omitempty"`
 }
 type SharedPort struct {
 	LocalPort  int `json:"localPort"`

@@ -9,7 +9,10 @@ if (Get-Service NetConductorAgent -ErrorAction SilentlyContinue) {
  Stop-Service NetConductorAgent -ErrorAction Stop
  if ($serviceProcessId -gt 0) { Wait-Process -Id $serviceProcessId -Timeout 15 -ErrorAction SilentlyContinue }
 }
-Copy-Item -LiteralPath $Binary -Destination (Join-Path $installRoot 'netconductor.exe') -Force
+for($attempt=0;$attempt -lt 10;$attempt++) {
+ try {Copy-Item -LiteralPath $Binary -Destination (Join-Path $installRoot 'netconductor.exe') -Force;break}
+ catch {if($attempt -eq 9){throw};Start-Sleep -Milliseconds 500}
+}
 $configPath=Join-Path $dataRoot 'agent.json'
 if (-not (Test-Path -LiteralPath $configPath)) { & (Join-Path $installRoot 'netconductor.exe') -mode init-agent -config $configPath; if ($LASTEXITCODE -ne 0) { throw 'Configuration initialization failed' } }
 $sid=(Get-LocalUser -Name $DesktopUser -ErrorAction Stop).SID.Value

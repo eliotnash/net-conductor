@@ -24,6 +24,7 @@ type enrollment struct {
 	IP      string
 }
 type Server struct {
+	remote        remoteHub
 	mu            sync.Mutex
 	cfg           core.ServerConfig
 	path          string
@@ -40,6 +41,8 @@ func New(cfg core.ServerConfig, path string) (*Server, error) {
 		return nil, errors.New("invalid server configuration")
 	}
 	s := &Server{cfg: cfg, path: path, sessions: map[string]time.Time{}, codes: map[string]enrollment{}, loginAttempts: map[string][]time.Time{}, forwards: map[string]func(){}}
+	s.remote.agents = map[string]*signalConn{}
+	s.remote.browsers = map[string]remoteBrowser{}
 	if e := core.Load(path, &s.state); e != nil && !os.IsNotExist(e) {
 		return nil, e
 	}
@@ -90,6 +93,9 @@ func (s *Server) guard(h http.HandlerFunc) http.HandlerFunc {
 }
 func (s *Server) Handler(assets fs.FS) http.Handler {
 	m := http.NewServeMux()
+	m.HandleFunc("GET /api/remote/agent", s.remoteAgent)
+	m.HandleFunc("GET /api/remote/{id}", s.guard(s.remoteBrowser))
+	m.HandleFunc("GET /api/agent/ssh-key", s.agentSSHKey)
 	m.HandleFunc("POST /api/login", s.login)
 	m.HandleFunc("POST /api/logout", func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
@@ -324,10 +330,12 @@ func (s *Server) join(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
 	var v struct {
-		ID          string       `json:"id"`
-		Version     string       `json:"version"`
-		LatencyMS   int64        `json:"latencyMs"`
-		Diagnostics []core.Check `json:"diagnostics"`
+		SSHUser        string       `json:"sshUser"`
+		SSHFingerprint string       `json:"sshFingerprint"`
+		ID             string       `json:"id"`
+		Version        string       `json:"version"`
+		LatencyMS      int64        `json:"latencyMs"`
+		Diagnostics    []core.Check `json:"diagnostics"`
 	}
 	if e := core.Decode(w, r, &v); e != nil {
 		core.Fail(w, 400, e)
@@ -345,6 +353,12 @@ func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.LastSeen = time.Now()
+	if d.SSHUser == "" && len(v.SSHUser) > 0 && len(v.SSHUser) <= 80 && strings.HasPrefix(v.SSHFingerprint, "SHA256:") && len(v.SSHFingerprint) < 100 {
+		d.SSHUser = v.SSHUser
+		d.SSHFingerprint = v.SSHFingerprint
+		d.SSHPort = 22
+		s.persist()
+	}
 	d.LatencyMS = v.LatencyMS
 	d.AgentVersion = v.Version
 	d.Diagnostics = v.Diagnostics

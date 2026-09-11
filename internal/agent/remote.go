@@ -6,15 +6,38 @@ import (
 	"errors"
 	"github.com/gorilla/websocket"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"netconductor/internal/core"
 	"netconductor/internal/remote"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
+func localSSHAddress(c core.AgentConfig) (string, error) {
+	address := c.SSHAddress
+	if address == "" {
+		address = "127.0.0.1:22"
+	}
+	host, port, err := net.SplitHostPort(address)
+	n, parseErr := strconv.Atoi(port)
+	ip := net.ParseIP(host)
+	if err != nil || parseErr != nil || !core.Port(n) || ip == nil || (!ip.IsLoopback() && host != c.IP) {
+		return "", errors.New("SSH address must be loopback or this device's tunnel IP")
+	}
+	return address, nil
+}
+func (a *Agent) remoteStatus(status string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.remoteState != status {
+		a.remoteState = status
+		a.event("remote.signaling", status)
+	}
+}
 func (a *Agent) remoteLoop(ctx context.Context) {
 	for {
 		if ctx.Err() != nil {
@@ -33,6 +56,8 @@ func (a *Agent) remoteConnect(ctx context.Context) {
 	if c.ID == "" {
 		return
 	}
+	a.remoteStatus("connecting")
+	defer a.remoteStatus("disconnected")
 	a.syncSSHKey(ctx)
 	endpoint := strings.Replace(c.Server, "https://", "wss://", 1) + "/api/remote/agent?id=" + url.QueryEscape(c.ID)
 	client, err := makeClient(c.Certificate)
@@ -45,6 +70,7 @@ func (a *Agent) remoteConnect(ctx context.Context) {
 		return
 	}
 	defer ws.Close()
+	a.remoteStatus("connected")
 	ws.SetReadLimit(128 * 1024)
 	connectionCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -95,7 +121,12 @@ func (a *Agent) remoteConnect(ctx context.Context) {
 				continue
 			}
 			sid := m.SID
-			session, err := remote.New(connectionCtx, remote.Config{ExcludeIP: c.IP, Address: "127.0.0.1:22", User: c.SSHUser, Key: c.SSHKey, Fingerprint: c.SSHHostFingerprint, Desktop: a.desktopRequest}, offer, func(kind string, v any) error { return send(sid, kind, v) })
+			address, addressErr := localSSHAddress(c)
+			if addressErr != nil {
+				send(sid, "error", addressErr.Error())
+				continue
+			}
+			session, err := remote.New(connectionCtx, remote.Config{ExcludeIP: c.IP, Address: address, User: c.SSHUser, Key: c.SSHKey, Fingerprint: c.SSHHostFingerprint, Desktop: a.desktopRequest}, offer, func(kind string, v any) error { return send(sid, kind, v) })
 			if err != nil {
 				send(sid, "error", err.Error())
 				continue
@@ -196,6 +227,9 @@ func (a *Agent) desktopRequest(ctx context.Context, r remote.Request) (any, erro
 	}
 }
 func (a *Agent) desktopNext(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	a.desktopSeen = time.Now()
+	a.mu.Unlock()
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	for {

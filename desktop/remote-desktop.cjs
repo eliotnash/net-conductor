@@ -141,6 +141,7 @@ exports.start = ({ readConfig, tray }) => {
         }
         await api("reply", { id: job.id, result, error });
       } catch {
+        tray.setToolTip("Net Conductor · 桌面连接中断，正在重试");
         await new Promise((r) => setTimeout(r, 2000));
       }
     }

@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const Version = "0.2.0"
+const Version = "0.2.1"
 
 type Device struct {
 	ID             string    `json:"id"`
@@ -90,6 +90,7 @@ type ServerConfig struct {
 	MapBind          string `json:"mapBind"`
 }
 type AgentConfig struct {
+	SSHAddress         string       `json:"sshAddress,omitempty"`
 	SSHUser            string       `json:"sshUser,omitempty"`
 	SSHKey             string       `json:"sshKey,omitempty"`
 	SSHAuthorizedKeys  string       `json:"sshAuthorizedKeys,omitempty"`

@@ -12,3 +12,4 @@ agent.json
 server-config.json
 state.json
 *.crt
+/test-results/

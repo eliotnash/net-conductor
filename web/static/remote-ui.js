@@ -19,7 +19,8 @@
     return btoa(s);
   };
   class Link {
-    constructor(id, mode, status, event) {
+    constructor(id, mode, status, event, transport = "auto") {
+      this.transport = transport;
       this.seq = 0;
       this.pending = new Map();
       this.parts = new Map();
@@ -27,25 +28,33 @@
       this.event = event;
       this.closed = false;
       this.relay = false;
-      this.pc = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }],
-      });
-      this.dc = this.pc.createDataChannel("nc");
+      this.p2pUnavailable =
+        transport === "p2p" && typeof RTCPeerConnection === "undefined";
+      if (typeof RTCPeerConnection === "undefined") this.transport = "relay";
+      this.pc =
+        this.transport === "relay"
+          ? null
+          : new RTCPeerConnection({
+              iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }],
+            });
+      this.dc = this.pc?.createDataChannel("nc");
       this.ready = new Promise((resolve, reject) => {
         this.resolve = resolve;
         this.reject = reject;
       });
-      this.dc.onmessage = (e) => this.receive(JSON.parse(e.data));
-      this.dc.onopen = () => {
-        if (!this.relay) {
-          status("P2P 直连");
-          this.resolve();
-        }
-      };
-      this.pc.onconnectionstatechange = () => {
-        if (["failed", "disconnected"].includes(this.pc.connectionState))
-          this.useRelay();
-      };
+      if (this.dc) this.dc.onmessage = (e) => this.receive(JSON.parse(e.data));
+      if (this.dc)
+        this.dc.onopen = () => {
+          if (!this.relay) {
+            status("P2P 直连");
+            this.resolve();
+          }
+        };
+      if (this.pc)
+        this.pc.onconnectionstatechange = () => {
+          if (["failed", "disconnected"].includes(this.pc.connectionState))
+            this.useRelay();
+        };
       this.ws = new WebSocket(
         `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/remote/${encodeURIComponent(id)}?mode=${mode}`,
       );
@@ -53,7 +62,8 @@
         try {
           const m = JSON.parse(e.data);
           if (m.type === "answer") {
-            if (!this.closed) await this.pc.setRemoteDescription(m.data);
+            if (!this.closed && this.pc)
+              await this.pc.setRemoteDescription(m.data);
           } else if (m.type === "relay") {
             this.receive(m.data);
           } else if (m.type === "error") {
@@ -69,6 +79,19 @@
         this.fail(Error("无法建立远程会话，请检查设备状态和登录权限"));
       this.ws.onopen = async () => {
         try {
+          if (this.p2pUnavailable)
+            throw Error("浏览器不支持 WebRTC；仅 P2P 模式不可用");
+          if (this.transport === "relay") {
+            this.ws.send(
+              JSON.stringify({
+                type: "offer",
+                data: { mode, transport: "relay" },
+              }),
+            );
+            this.offered = true;
+            this.useRelay();
+            return;
+          }
           await this.pc.setLocalDescription(await this.pc.createOffer());
           await new Promise((resolve) => {
             if (this.pc.iceGatheringState === "complete") {
@@ -87,7 +110,11 @@
           this.ws.send(
             JSON.stringify({
               type: "offer",
-              data: { mode, sdp: this.pc.localDescription },
+              data: {
+                mode,
+                transport: this.transport,
+                sdp: this.pc.localDescription,
+              },
             }),
           );
           this.offered = true;
@@ -103,7 +130,7 @@
           this.ws.send(JSON.stringify({ type: "ping" }));
       }, 20000);
       this.stats = setInterval(async () => {
-        if (this.relay || this.closed) return;
+        if (this.relay || this.closed || !this.pc) return;
         try {
           const reports = await this.pc.getStats();
           reports.forEach((r) => {
@@ -124,8 +151,12 @@
     }
     useRelay() {
       if (this.closed || !this.offered) return;
+      if (this.transport === "p2p") {
+        this.fail(Error("P2P 未连通；可关闭后选择服务器中转"));
+        return;
+      }
       this.relay = true;
-      this.status("服务器中转 · HTTPS");
+      this.status("服务器中转 · HTTPS/WebSocket");
       this.resolve();
     }
     receive(m) {
@@ -175,10 +206,11 @@
         this.pending.set(id, { resolve, reject, timer });
         const m = { id, op, ...fields };
         try {
-          if (!this.relay && this.dc.readyState === "open")
+          if (!this.relay && this.dc?.readyState === "open")
             this.dc.send(JSON.stringify(m));
           else {
             this.useRelay();
+            if (this.closed) throw Error("P2P 连接已断开");
             this.ws.send(JSON.stringify({ type: "relay", data: m }));
           }
         } catch (err) {
@@ -207,15 +239,22 @@
       this.pending.clear();
       this.parts.clear();
       this.ws.close();
-      this.pc.close();
+      this.pc?.close();
     }
   }
-  window.openRemote = async (id, mode, name) => {
+  window.openRemote = async (id, mode, name, transport = "auto") => {
     const dlg = document.createElement("dialog");
     dlg.className = "remote-dialog";
-    dlg.innerHTML = `<header><h2>${{ ssh: "SSH", files: "文件管理", desktop: "远程桌面" }[mode]} · ${escape(name)}</h2><button class="remote-close">关闭</button></header><div class="remote-status">正在尝试 P2P 直连…</div><div class="remote-error" role="alert"></div><div class="remote-body"></div>`;
+    dlg.innerHTML = `<header><h2>${{ ssh: "SSH", files: "文件管理", desktop: "远程桌面" }[mode]} · ${escape(name)}</h2><button class="remote-close">关闭</button></header><label>连接方式 <select class="remote-transport"><option value="auto">自动：优先 P2P</option><option value="p2p">仅 P2P</option><option value="relay">仅服务器中转</option></select></label><div class="remote-status">正在连接…</div><div class="remote-error" role="alert"></div><div class="remote-body"></div>`;
     document.body.append(dlg);
     dlg.showModal();
+    const route = dlg.querySelector(".remote-transport");
+    route.value = transport;
+    route.onchange = () => {
+      const next = route.value;
+      dlg.close();
+      window.openRemote(id, mode, name, next);
+    };
     const body = dlg.querySelector(".remote-body"),
       status = dlg.querySelector(".remote-status"),
       error = dlg.querySelector(".remote-error");
@@ -233,6 +272,7 @@
         if (m.type === "terminal") terminal?.write(decode(m.data));
         if (m.type === "terminalEnd") terminal?.writeln("\r\n[终端已结束]");
       },
+      transport,
     );
     dlg.querySelector(".remote-close").onclick = () => dlg.close();
     dlg.addEventListener(
@@ -416,9 +456,23 @@
         await load();
       } else {
         body.innerHTML =
-          '<p class="muted">当前已登录用户的主屏幕。点击画面后可操作键鼠；不支持锁屏/UAC 安全桌面、声音或剪贴板同步。</p><img class="remote-screen" tabindex="0" alt="远程 Windows 桌面">';
+          '<p class="muted">当前已登录用户的主屏幕。启用控制后点击画面可操作键鼠；同机控制请使用隔离测试窗口。不支持锁屏/UAC 安全桌面、声音或剪贴板同步。</p><label><input type="checkbox" class="remote-control">启用键鼠控制</label><img class="remote-screen" tabindex="0" alt="远程 Windows 桌面">';
         const img = body.querySelector("img");
-        const send = (input) => link.call("input", { input }).catch(report);
+        const control = body.querySelector(".remote-control");
+        const send = (input) => {
+          if (!control.checked && input.kind !== "release") return;
+          return link.call("input", { input }).catch(report);
+        };
+        control.onchange = () => {
+          if (!control.checked) send({ kind: "release" });
+        };
+        const point = (e) => {
+          const r = img.getBoundingClientRect();
+          return {
+            x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)),
+            y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)),
+          };
+        };
         let move = 0;
         img.onpointermove = (e) => {
           if (Date.now() - move < 80) return;
@@ -436,10 +490,10 @@
           try {
             img.setPointerCapture(e.pointerId);
           } catch {}
-          send({ kind: "button", button: e.button, down: true });
+          send({ kind: "button", button: e.button, down: true, ...point(e) });
         };
         img.onpointerup = (e) =>
-          send({ kind: "button", button: e.button, down: false });
+          send({ kind: "button", button: e.button, down: false, ...point(e) });
         img.oncontextmenu = (e) => e.preventDefault();
         img.onkeydown = (e) => {
           e.preventDefault();
@@ -450,6 +504,7 @@
           send({ kind: "key", code: e.code, down: false });
         };
         img.onblur = () => send({ kind: "release" });
+        img.onpointercancel = () => send({ kind: "release" });
         img.addEventListener(
           "wheel",
           (e) => {

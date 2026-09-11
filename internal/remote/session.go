@@ -21,8 +21,9 @@ type Message struct {
 	Data json.RawMessage `json:"data,omitempty"`
 }
 type Offer struct {
-	SDP  webrtc.SessionDescription `json:"sdp"`
-	Mode string                    `json:"mode"`
+	Transport string                    `json:"transport,omitempty"`
+	SDP       webrtc.SessionDescription `json:"sdp"`
+	Mode      string                    `json:"mode"`
 }
 type Request struct {
 	ID     int             `json:"id"`
@@ -67,6 +68,15 @@ func New(ctx context.Context, cfg Config, offer Offer, signal func(string, any) 
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 	s := &Session{ctx: ctx, cancel: cancel, cfg: cfg, mode: offer.Mode, signal: signal, queue: make(chan []byte, 64)}
+	if offer.Transport != "" && offer.Transport != "auto" && offer.Transport != "p2p" && offer.Transport != "relay" {
+		cancel()
+		return nil, errors.New("invalid transport")
+	}
+	if offer.Transport == "relay" {
+		s.relay = true
+		go s.run()
+		return s, nil
+	}
 	settings := webrtc.SettingEngine{}
 	settings.SetIncludeLoopbackCandidate(true)
 	settings.SetIPFilter(func(ip net.IP) bool { return ip.String() != cfg.ExcludeIP })
